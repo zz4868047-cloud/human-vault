@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Zaki Battle Royale 3D</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#77c9ff;font-family:system-ui,Arial;color:white;touch-action:none}
+#game{position:fixed;inset:0}canvas{display:block}
+.panel{background:#07182bc9;border:1px solid #ffffff40;border-radius:12px;padding:8px 11px;text-shadow:0 1px 3px #000}
+#brand{position:fixed;top:10px;left:10px;font-weight:900;font-size:15px;direction:ltr}
+#stats{position:fixed;top:10px;right:10px;min-width:150px;font-size:13px}
+.bar{height:9px;background:#172334;border-radius:9px;overflow:hidden;margin-top:4px}.fill{height:100%;width:100%;background:#31df63}
+#shield{background:#24b8ff;width:50%}
+#message{position:fixed;top:22%;left:50%;transform:translateX(-50%);font-weight:800;font-size:20px;text-align:center;max-width:90%;pointer-events:none;text-shadow:0 2px 5px #000}
+#bottomStats{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);width:min(360px,75vw);font-size:12px}
+#inventory{position:fixed;bottom:12px;right:10px;display:flex;gap:4px;direction:ltr}
+.slot{width:45px;height:48px;border:2px solid #ffffff77;border-radius:7px;background:#172b48d9;display:grid;place-items:center;font-size:21px}
+.slot.active{border-color:#ffe45b;background:#4b4c50e8}
+#joystick{position:fixed;bottom:32px;left:25px;width:120px;height:120px;border:2px solid #ffffff8c;background:#0c213b66;border-radius:50%;display:none}
+#stick{position:absolute;width:48px;height:48px;border-radius:50%;background:#eaf6ffb8;border:2px solid white;left:34px;top:34px}
+#lookZone{position:fixed;inset:35% 0 20% 35%;display:none}
+.action{position:fixed;border:1px solid #ffffff99;background:#10243abf;border-radius:50%;width:62px;height:62px;display:grid;place-items:center;font-size:25px;user-select:none}
+#shoot{right:20px;bottom:110px;background:#b52b39cc}#jump{right:90px;bottom:35px}#build{right:20px;bottom:35px}#reload{right:90px;bottom:180px}
+#help{position:fixed;left:10px;bottom:10px;font-size:11px;opacity:.85;max-width:150px}
+#start{position:fixed;inset:0;background:linear-gradient(#063a64a8,#071526e8);display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+#start .card{max-width:430px;background:#07182bea;border:1px solid #ffffff50;border-radius:22px;padding:24px;box-shadow:0 15px 50px #0007}
+button{font:inherit;font-weight:800;border:0;border-radius:12px;padding:13px 20px;background:#ffce38;color:#17202b}
+small{opacity:.8}
+@media(pointer:coarse){#joystick,#lookZone{display:block}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="brand" class="panel">⚡ ZAKI BATTLE ROYALE</div>
+<div id="stats" class="panel">🏆 <span id="kills">0</span> إقصاء &nbsp; • &nbsp; 👤 <span id="alive">12</span> لاعب<br>❤️ الصحة <span id="hpText">100</span><div class="bar"><div id="hp" class="fill"></div></div>🛡️ الدرع <span id="shieldText">50</span><div class="bar"><div id="shield" class="fill"></div></div></div>
+<div id="message">اهبط في الجزيرة واجمع الفوز!</div>
+<div id="bottomStats" class="panel">🔫 ذخيرة: <b id="ammo">30</b> / 120 &nbsp; • &nbsp; 🌪️ العاصفة تقترب خلال <b id="timer">90</b> ث</div>
+<div id="inventory"><div class="slot active">🔫</div><div class="slot">🪓</div><div class="slot">🧱</div><div class="slot">🧪</div></div>
+<div id="joystick"><div id="stick"></div></div><div id="lookZone"></div>
+<div id="shoot" class="action">🎯</div><div id="jump" class="action">⬆️</div><div id="build" class="action">🧱</div><div id="reload" class="action">↻</div>
+<div id="help">الهاتف: العصا للحركة واسحب يمين الشاشة لتدوير الكاميرا.<br>الكمبيوتر: WASD + الماوس، Space للقفز، زر الفأرة للإطلاق.</div>
+<div id="start"><div class="card"><div style="font-size:46px">🏝️🔫</div><h1 style="margin:5px 0">Zaki Battle Royale 3D</h1><p>لعبة بقاء ثلاثية الأبعاد مصغّرة — قاتل الروبوتات، اجمع الإقصاءات، وابقَ آخر لاعب!</p><p><small>تعمل داخل المتصفح. يلزم اتصال بالإنترنت لتحميل محرك 3D أول مرة.</small></p><button id="play">ابدأ المعركة</button></div></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+let scene,camera,renderer,player,gun,clock,started=false,hp=100,shield=50,ammo=30,reserve=120,kills=0,elapsed=0,storm=90,builds=0,jumping=0,vy=0;
+const keys={},bots=[],bullets=[],loot=[],trees=[],world=90;
+let yaw=0,pitch=-0.12,moveX=0,moveY=0,lookPointer=null,lastX=0,lastY=0,fireCooldown=0;
+const mat=(color,roughness=.85)=>new THREE.MeshStandardMaterial({color,roughness});
+const mats={grass:mat(0x4eaa55),darkgrass:mat(0x35894b),wood:mat(0x9b6033),roof:mat(0x3b5365),wall:mat(0xe0c59b),blue:mat(0x168de0),skin:mat(0xe8b48b),black:mat(0x263544),red:mat(0xf04455),gold:mat(0xffd447),leaf:mat(0x247c43),trunk:mat(0x79502e),water:mat(0x218dc7),white:mat(0xf0f5f9)};
+function mesh(geo,material,x,y,z,parent=scene){let m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m}
+function makeHumanoid(color,x,z,isPlayer=false){
+ const g=new THREE.Group();scene.add(g);g.position.set(x,0,z);
+ const bodyMat=mat(color), skin=mat(isPlayer?0xe5b18c:0xdca17b), dark=mat(0x202b38);
+ mesh(new THREE.CapsuleGeometry(.42,.65,4,8),bodyMat,0,1.15,0,g);
+ mesh(new THREE.SphereGeometry(.29,12,10),skin,0,1.92,0,g);
+ mesh(new THREE.BoxGeometry(.24,.18,.25),dark,0,2.0,.24,g);
+ const arm1=mesh(new THREE.CapsuleGeometry(.12,.42,3,6),bodyMat,-.48,1.3,0,g);
+ const arm2=mesh(new THREE.CapsuleGeometry(.12,.42,3,6),bodyMat,.48,1.3,0,g);
+ mesh(new THREE.BoxGeometry(.16,.17,.65),dark,.25,1.28,-.42,g);
+ g.userData={health:100,isPlayer,arm1,arm2};return g
+}
+function createWorld(){
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x80d2ff);scene.fog=new THREE.Fog(0x80d2ff,65,155);
+ camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.1,350);
+ renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;$('game').appendChild(renderer.domElement);
+ scene.add(new THREE.HemisphereLight(0xc9eaff,0x42603a,2.0));
+ const sun=new THREE.DirectionalLight(0xfff0cc,2.7);sun.position.set(-25,45,25);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+ // island and water
+ mesh(new THREE.CylinderGeometry(66,75,5,64),mats.darkgrass,0,-3,0);
+ mesh(new THREE.CylinderGeometry(61,67,2,64),mats.grass,0,-.5,0);
+ const water=mesh(new THREE.PlaneGeometry(500,500),mats.water,0,-3.3,0);water.rotation.x=-Math.PI/2;
+ // hills
+ for(let i=0;i<24;i++){let a=i*2.4,r=28+(i%5)*5;let h=3+(i%4)*1.7;let hill=mesh(new THREE.ConeGeometry(7+(i%3)*2,h,7),mats.darkgrass,Math.cos(a)*r,h/2-.1,Math.sin(a)*r);hill.rotation.y=a}
+ // town buildings
+ for(let i=0;i<18;i++){let x=(Math.random()-.5)*42,z=(Math.random()-.5)*42;if(Math.hypot(x,z)<8)continue;let w=3+Math.random()*3,d=3+Math.random()*3,h=3+Math.random()*7;
+ mesh(new THREE.BoxGeometry(w,h,d),[mats.wall,mats.blue,mats.roof][i%3],x,h/2,z);
+ mesh(new THREE.BoxGeometry(w+.3,.35,d+.3),mats.roof,x,h+.15,z);
+ for(let j=0;j<Math.max(1,Math.floor(h/2));j++)for(let s of [-1,1])mesh(new THREE.BoxGeometry(.45,.6,.08),mats.blue,x+s*w*.28,1.1+j*1.8,z-d/2-.05);
+ }
+ // trees
+ for(let i=0;i<110;i++){let x=(Math.random()-.5)*115,z=(Math.random()-.5)*115;if(Math.hypot(x,z)<28)continue;
+ mesh(new THREE.CylinderGeometry(.22,.35,2,6),mats.trunk,x,1,z);
+ let crown=mesh(new THREE.ConeGeometry(1.2+Math.random()*.7,3+Math.random()*2,7),mats.leaf,x,3,z);crown.rotation.y=Math.random()*3;
+ }
+ // rocks
+ for(let i=0;i<35;i++){let x=(Math.random()-.5)*115,z=(Math.random()-.5)*115;let r=.5+Math.random()*1.2;let m=mesh(new THREE.DodecahedronGeometry(r,0),mat(0x777f82),x,r*.55,z);m.rotation.set(Math.random(),Math.random(),Math.random())}
+ player=makeHumanoid(0x168de0,0,12,true);
+ gun=mesh(new THREE.BoxGeometry(.16,.16,1.1),mats.black,.32,1.25,-.9,player);
+ // floating clouds and distant mountains
+ for(let i=0;i<10;i++){let m=mesh(new THREE.ConeGeometry(9,15,7),mat(0x8fa9c4),Math.cos(i)*100,5,Math.sin(i)*100);m.rotation.z=Math.PI}
+ for(let i=0;i<11;i++){let x=(Math.random()-.5)*100,z=(Math.random()-.5)*100;if(Math.hypot(x,z)<35)continue;let b=makeHumanoid([0xf04455,0xffb12e,0x9a70e8,0x38c9a0][i%4],x,z);b.scale.setScalar(.9);b.userData.health=100;b.userData.bot=true;b.userData.cooldown=Math.random()*3;bots.push(b)}
+ // loot crates
+ for(let i=0;i<12;i++){let x=(Math.random()-.5)*65,z=(Math.random()-.5)*65;let c=mesh(new THREE.BoxGeometry(.8,.6,.8),mats.gold,x,.35,z);mesh(new THREE.BoxGeometry(.85,.12,.85),mats.wood,x,.65,z);loot.push(c)}
+}
+function updateCamera(){let target=new THREE.Vector3(player.position.x,1.4,player.position.z);let distance=7.5;let offset=new THREE.Vector3(Math.sin(yaw)*distance,2.8+pitch*5,Math.cos(yaw)*distance);camera.position.copy(target).add(offset);camera.lookAt(target.x,1.4,target.z)}
+function shoot(){
+ if(!started)return;if(ammo<=0){$('message').textContent='الذخيرة فارغة! اضغط ↻';return}ammo--;fireCooldown=.18;$('ammo').textContent=ammo;
+ const origin=new THREE.Vector3(player.position.x,1.45,player.position.z);const dir=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)).normalize();
+ const ray=new THREE.Raycaster(origin,dir,0,42);let candidates=bots.filter(b=>b.userData.health>0);let hit=null,best=42;
+ for(const b of candidates){let p=b.position.clone().add(new THREE.Vector3(0,1,0));let to=p.clone().sub(origin);let along=to.dot(dir);if(along>0&&along<best){let closest=origin.clone().add(dir.clone().multiplyScalar(along));if(closest.distanceTo(p)<1.15){best=along;hit=b}}}
+ const flash=mesh(new THREE.SphereGeometry(.12,6,6),mats.gold,origin.x+dir.x*1.4,origin.y,origin.z+dir.z*1.4);setTimeout(()=>{scene.remove(flash)},70);
+ if(hit){hit.userData.health-=34;hit.children[0].material=mat(0xffffff);setTimeout(()=>{if(hit.children[0])hit.children[0].material=mat(0xf04455)},90);if(hit.userData.health<=0){hit.visible=false;kills++;$('kills').textContent=kills;$('alive').textContent=Math.max(1,12-kills);$('message').textContent='إقصاء رائع! +1 🏆';setTimeout(()=>{$('message').textContent=''},1300)}}
+}
+function buildWall(){if(!started)return;if(builds>=10){$('message').textContent='نفدت مواد البناء!';return}builds++;let x=player.position.x-Math.sin(yaw)*2.5,z=player.position.z-Math.cos(yaw)*2.5;let wall=mesh(new THREE.BoxGeometry(3.3,2.7,.25),mat(0x9b714c),x,1.35,z);wall.rotation.y=yaw;setTimeout(()=>{scene.remove(wall);builds--},15000);$('message').textContent='تم بناء جدار! 🧱';setTimeout(()=>$('message').textContent='',900)}
+function reload(){if(reserve<=0||ammo===30)return;let n=Math.min(30-ammo,reserve);ammo+=n;reserve-=n;$('ammo').textContent=ammo;$('bottomStats').innerHTML='🔫 ذخيرة: <b id="ammo">'+ammo+'</b> / '+reserve+' &nbsp; • &nbsp; 🌪️ العاصفة تقترب خلال <b id="timer">'+Math.max(0,Math.ceil(storm-elapsed))+'</b> ث'}
+function damage(n){if(shield>0){let s=Math.min(shield,n);shield-=s;n-=s}hp=Math.max(0,hp-n);$('hpText').textContent=hp;$('shieldText').textContent=shield;$('hp').style.width=hp+'%';$('shield').style.width=shield+'%';if(hp<=0){$('message').textContent='انتهت المعركة! اضغط إعادة اللعب';started=false;setTimeout(()=>{$('start').style.display='flex';$('play').textContent='العب مرة أخرى'},1000)}}
+function tick(){
+ requestAnimationFrame(tick);if(!renderer)return;let dt=Math.min(clock.getDelta(),.05);
+ if(started){
+ elapsed+=dt;fireCooldown=Math.max(0,fireCooldown-dt);storm=Math.max(0,90-elapsed);let t=$('timer');if(t)t.textContent=Math.ceil(storm);
+ let forward=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-moveY;
+ let side=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+moveX;
+ let speed=10;player.position.x+=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed*dt;player.position.z+=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*speed*dt;
+ player.position.x=Math.max(-58,Math.min(58,player.position.x));player.position.z=Math.max(-58,Math.min(58,player.position.z));player.rotation.y=yaw+Math.PI;
+ if(jumping){vy-=20*dt;player.position.y+=vy*dt;if(player.position.y<=0){player.position.y=0;vy=0;jumping=0}}
+ for(let b of bots){if(!b.visible)continue;b.userData.cooldown-=dt;let dx=player.position.x-b.position.x,dz=player.position.z-b.position.z,dist=Math.hypot(dx,dz);if(dist>5&&dist<42){b.position.x+=dx/dist*dt*1.7;b.position.z+=dz/dist*dt*1.7;b.rotation.y=Math.atan2(dx,dz)}if(dist<20&&b.userData.cooldown<=0){b.userData.cooldown=1.5+Math.random()*1.5;if(Math.random()<.5)damage(5)}}
+ for(let c of loot){if(c.visible&&c.position.distanceTo(player.position)<2){c.visible=false;let pick=Math.random();if(pick<.5){reserve+=30;$('message').textContent='جمعت ذخيرة +30 🔫'}else{hp=Math.min(100,hp+20);$('hpText').textContent=hp;$('hp').style.width=hp+'%';$('message').textContent='حصلت على علاج +20 ❤️'}setTimeout(()=>$('message').textContent='',1000)}}
+ if(storm===0&&Math.random()<.015)damage(1);
+ updateCamera();
+ }
+ renderer.render(scene,camera)
+}
+function start(){if(!window.THREE){$('message').textContent='تعذر تحميل محرك 3D. تحقق من الإنترنت.';return}if(!scene){createWorld();clock=new THREE.Clock();tick()}hp=100;shield=50;ammo=30;reserve=120;kills=0;elapsed=0;storm=90;started=true;player.position.set(0,0,12);yaw=0;pitch=-.12;$('kills').textContent='0';$('alive').textContent='12';$('hpText').textContent='100';$('shieldText').textContent='50';$('hp').style.width='100%';$('shield').style.width='50%';$('ammo').textContent='30';$('timer').textContent='90';$('message').textContent='قاتل الروبوتات واجمع الإقصاءات!';$('start').style.display='none';}
+$('play').addEventListener('click',start);
+$('shoot').addEventListener('pointerdown',e=>{e.preventDefault();shoot()});$('jump').addEventListener('pointerdown',e=>{e.preventDefault();if(started&&player.position.y===0){jumping=1;vy=8}});$('build').addEventListener('pointerdown',e=>{e.preventDefault();buildWall()});$('reload').addEventListener('pointerdown',e=>{e.preventDefault();reload()});
+addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space'&&started&&player.position.y===0){jumping=1;vy=8}if(e.code==='KeyR')reload();if(e.code==='KeyB')buildWall();if(e.code==='Enter'&&!started&&$('start').style.display!=='none')start()});
+addEventListener('keyup',e=>keys[e.code]=false);
+rendererlessResize();function rendererlessResize(){addEventListener('resize',()=>{if(camera&&renderer){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}})}
+// Mobile movement joystick
+const joy=$('joystick'),stick=$('stick');let joyId=null,joyRect;
+joy.addEventListener('pointerdown',e=>{joyId=e.pointerId;joy.setPointerCapture(joyId);joyRect=joy.getBoundingClientRect();moveJoy(e)});
+joy.addEventListener('pointermove',e=>{if(e.pointerId===joyId)moveJoy(e)});
+function moveJoy(e){let cx=joyRect.left+joyRect.width/2,cy=joyRect.top+joyRect.height/2,dx=e.clientX-cx,dy=e.clientY-cy,len=Math.hypot(dx,dy),max=38;if(len>max){dx=dx/len*max;dy=dy/len*max}stick.style.left=(34+dx)+'px';stick.style.top=(34+dy)+'px';moveX=dx/max;moveY=dy/max}
+function resetJoy(){joyId=null;moveX=0;moveY=0;stick.style.left='34px';stick.style.top='34px'}
+joy.addEventListener('pointerup',resetJoy);joy.addEventListener('pointercancel',resetJoy);
+const look=$('lookZone');look.addEventListener('pointerdown',e=>{lookPointer=e.pointerId;lastX=e.clientX;lastY=e.clientY;look.setPointerCapture(lookPointer)});look.addEventListener('pointermove',e=>{if(e.pointerId===lookPointer){yaw+=(e.clientX-lastX)*.008;pitch=Math.max(-.45,Math.min(.3,pitch+(e.clientY-lastY)*.003));lastX=e.clientX;lastY=e.clientY}});look.addEventListener('pointerup',()=>lookPointer=null);look.addEventListener('pointercancel',()=>lookPointer=null);
+renderer=null;
+if(window.THREE){createWorld();clock=new THREE.Clock();tick()}
+})();
+</script>
+</body></html>
